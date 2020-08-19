@@ -1,6 +1,8 @@
-# Aiopulse
+# Aiopulse 2
 
-## Asynchronous library to control Rollease Acmeda Automate roller blinds
+## Asynchronous library to control Rollease Acmeda Automate roller blinds with the Pulse v2 Hub
+
+This is an updated fork of https://github.com/atmurray/aiopulse/
 
 Requires Python 3 and uses asyncio.
 
