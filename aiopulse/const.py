@@ -1,7 +1,24 @@
 """Acmeda Pulse Hub constants."""
 from enum import Enum
+import re
 
 UpdateType = Enum("UpdateType", "info rollers rooms scenes timers")
+
+HUB_NAME = "!000NAME?;"
+HUB_NAME_RESPONSE = re.compile(r"!000NAME(?P<name>.+);")
+
+HUB_PING = HUB_NAME  # there is no known ping, so just use the NAME command
+
+HUB_SERIAL = "!000SN?;"
+HUB_SERIAL_RESPONSE = re.compile(r"!000SN(?P<serial>.+);")
+
+
+ALL_RESPONSES = {}
+# This build the ALL_RESPONSES dict by looking at the globals in the context
+# of the module. More work at start, but less chance of human error
+for var, value in dict(globals()).items():
+    if var.endswith("_RESPONSE"):
+        ALL_RESPONSES[var] = value
 
 HEADER = bytes.fromhex("00000003")
 COMMAND_DISCOVER = bytes.fromhex("03000003")
@@ -13,8 +30,8 @@ RESPONSE_CONNECT = bytes.fromhex("0f000007")
 COMMAND_LOGIN = bytes.fromhex("0f000008")
 RESPONSE_LOGIN = bytes.fromhex("04000009")
 
-COMMAND_PING = bytes.fromhex("03000015")
-RESPONSE_PING = bytes.fromhex("03000016")
+# COMMAND_PING = bytes.fromhex("03000015")
+# RESPONSE_PING = bytes.fromhex("03000016")
 
 COMMAND_SETID = bytes.fromhex("28000090")
 RESPONSE_SETID = bytes.fromhex("03000091")

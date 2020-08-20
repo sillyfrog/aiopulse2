@@ -49,7 +49,7 @@ class HubTransportUdp(HubTransportBase):
 
         loop = asyncio.get_event_loop()
         self.transport, self.protocol = await loop.create_datagram_endpoint(
-            lambda: self, remote_addr=(self.host, self.port),
+            lambda: self, remote_addr=(self.host, self.port)
         )
 
     async def close(self):
@@ -85,7 +85,7 @@ class HubTransportUdpBroadcast(HubTransportUdp):
 
         loop = asyncio.get_event_loop()
         self.transport, self.protocol = await loop.create_datagram_endpoint(
-            lambda: self, sock=sock,
+            lambda: self, sock=sock
         )
 
 
@@ -95,7 +95,7 @@ class HubTransportTcp(HubTransportBase):
     def __init__(self, host=None):
         """TCP Transport constructor."""
         self.host = host
-        self.port = 12416
+        self.port = 1487
 
         self.reader = None
         self.writer = None
@@ -153,15 +153,18 @@ class HubTransportTcp(HubTransportBase):
 
     def send(self, buffer):
         """Abstraction of the underlying transport to send a buffer."""
+        if type(buffer) != bytes:
+            buffer = buffer.encode()
         if not self.writer or self.writer.is_closing():
             raise NotConnectedException
         self.writer.write(buffer)
 
     async def receive(self):
-        """Receive from stream."""
+        """Receive a single response from stream."""
         if self.writer.is_closing():
             raise NotConnectedException
-        return await self.reader.read(65535)
+        readerbytes = await self.reader.readuntil(b";")
+        return readerbytes.decode()
 
     def data_received(self, data):
         """Callback when data has been received."""

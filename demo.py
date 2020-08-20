@@ -6,21 +6,9 @@ import logging
 import aiopulse
 import functools
 
-from typing import (
-    Any,
-    Callable,
-    Optional,
-)
+from typing import Any, Callable, Optional
 
 from aiopulse import _LOGGER
-
-
-async def discover(prompt):
-    """Task to discover all hubs on the local network."""
-    print("Starting hub discovery")
-    async for hub in aiopulse.Hub.discover():
-        if hub.id not in prompt.hubs:
-            prompt.add_hub(hub)
 
 
 class HubPrompt(cmd.Cmd):
@@ -65,16 +53,16 @@ class HubPrompt(cmd.Cmd):
         elif asyncio.iscoroutinefunction(check_target):
             task = self.event_loop.create_task(target(*args))
         else:
-            task = self.event_loop.run_in_executor(  # type: ignore
-                None, target, *args
-            )
+            task = self.event_loop.run_in_executor(None, target, *args)  # type: ignore
 
         return task
 
-    def add_hub(self, hub):
+    async def add_hub(self, hubip):
         """Add a hub to the prompt."""
+        hub = aiopulse.Hub(hubip)
         self.hubs[hub.id] = hub
         hub.callback_subscribe(self.hub_update_callback)
+        await hub.run()
         print("Hub added to prompt")
 
     async def hub_update_callback(self, update_type):
@@ -90,10 +78,6 @@ class HubPrompt(cmd.Cmd):
         except Exception:
             print("Invalid arguments {}".format(args))
             return None
-
-    def do_discover(self, args):
-        """Command to discover all hubs on the local network."""
-        self.add_job(discover, self)
 
     def do_update(self, args):
         """Command to ask all hubs to send their information."""
@@ -161,8 +145,10 @@ class HubPrompt(cmd.Cmd):
 
     def do_connect(self, sargs):
         """Command to connect all hubs."""
-        for hub in self.hubs.values():
-            self.add_job(hub.run)
+        for hubip in sargs.split():
+            print("Hub IP:", hubip)
+            if hubip not in self.hubs:
+                self.add_job(self.add_hub, hubip)
 
     def do_disconnect(self, sargs):
         """Command to disconnect all connected hubs."""
@@ -203,13 +189,11 @@ async def main():
     prompt = HubPrompt(event_loop)
     prompt.prompt = "> "
 
-    tasks = [
-        event_loop.run_in_executor(None, prompt.cmdloop),
-    ]
+    tasks = [event_loop.run_in_executor(None, prompt.cmdloop)]
 
     await asyncio.wait(tasks)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     asyncio.run(main())
