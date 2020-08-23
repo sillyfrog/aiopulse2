@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Demo."""
 import asyncio
 import cmd
@@ -77,6 +78,9 @@ class HubPrompt(cmd.Cmd):
             return list(list(self.hubs.values())[hub_id].rollers.values())[roller_id]
         except Exception:
             print("Invalid arguments {}".format(args))
+            print(
+                "Format is <hub index> <roller index>. See 'list' for the index of each device."
+            )
             return None
 
     def do_update(self, args):
@@ -86,7 +90,7 @@ class HubPrompt(cmd.Cmd):
             self.add_job(hub.update)
 
     def do_list(self, args):
-        """Command to list all hubs, rollers, rooms, and scenes."""
+        """Command to list all hubs and rollers."""
         print("Listing hubs...")
         hub_id = 0
         for hub in self.hubs.values():
@@ -96,18 +100,6 @@ class HubPrompt(cmd.Cmd):
             for roller in hub.rollers.values():
                 roller_id += 1
                 print(f"Roller {roller_id}: {roller}")
-            room_id = 0
-            for room in hub.rooms.values():
-                room_id += 1
-                print(f"Room {room_id}: {room}")
-            scene_id = 0
-            for scene in hub.scenes.values():
-                scene_id += 1
-                print(f"Scene {scene_id}: {scene}")
-            timer_id = 0
-            for timer in hub.timers.values():
-                timer_id += 1
-                print(f"Timer {timer_id}: {timer}")
 
     def do_moveto(self, sargs):
         """Command to tell a roller to move a % closed."""
@@ -195,5 +187,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
+    # logging.basicConfig(level=logging.DEBUG)
     asyncio.run(main())

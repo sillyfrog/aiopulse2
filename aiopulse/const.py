@@ -12,6 +12,27 @@ HUB_PING = HUB_NAME  # there is no known ping, so just use the NAME command
 HUB_SERIAL = "!000SN?;"
 HUB_SERIAL_RESPONSE = re.compile(r"!000SN(?P<serial>.+);")
 
+HUB_QUERY_DEVICES = "!000v?;"
+HUB_QUERY_DEVICE_RESPONSE = re.compile(
+    r"!(?P<id>\w{3})v(?P<devicetype>\w)(?P<version>\d{2});"
+)
+
+DEVICE_QUERY_NAME = "!{id:3}NAME?;"
+DEVICE_QUERY_NAME_RESPONSE = re.compile(r"!(?P<id>\w{3})NAME(?P<name>.+);")
+
+DEVICE_QUERY_POSITION = "!{id:3}r?;"
+DEVICE_QUERY_POSITION_RESPONSE = re.compile(
+    r"!(?P<id>\w{3})r(?P<closedpercent>\d{3})b(?P<tiltpercent>\d{3}),R(?P<signal>[0-9A-F]{2});"
+)
+
+DEVICE_MOVE_TO_POSITION = "!{id:3}m{closedpercent:03d};"
+DEVICE_MOVE_TO_POSITION_RESPONSE = re.compile(
+    r"!(?P<id>\w{3})m(?P<closedpercent>\d{3}),R(?P<signal>[0-9A-F]{2});"
+)
+
+WS_ROLLER_VOLTAGE = re.compile(
+    r"(?P<voltage>[\.0-9]+)(?P<type>[A-Z])(?P<version>\d{2})"
+)
 
 ALL_RESPONSES = {}
 # This build the ALL_RESPONSES dict by looking at the globals in the context
@@ -20,32 +41,11 @@ for var, value in dict(globals()).items():
     if var.endswith("_RESPONSE"):
         ALL_RESPONSES[var] = value
 
-HEADER = bytes.fromhex("00000003")
-COMMAND_DISCOVER = bytes.fromhex("03000003")
-RESPONSE_DISCOVER = bytes.fromhex("57000004")
-
-COMMAND_CONNECT = bytes.fromhex("03000006")
-RESPONSE_CONNECT = bytes.fromhex("0f000007")
-
-COMMAND_LOGIN = bytes.fromhex("0f000008")
-RESPONSE_LOGIN = bytes.fromhex("04000009")
-
-# COMMAND_PING = bytes.fromhex("03000015")
-# RESPONSE_PING = bytes.fromhex("03000016")
-
-COMMAND_SETID = bytes.fromhex("28000090")
-RESPONSE_SETID = bytes.fromhex("03000091")
-
-COMMAND_UNKNOWN1 = bytes.fromhex("23000090")
-RESPONSE_UNKNOWN1 = bytes.fromhex("28000091")
-
-COMMAND_GET_HUB_INFO = bytes.fromhex("1e000090")
-RESPONSE_GET_HUB_INFO = bytes.fromhex("4a000091")
-
-COMMAND_MOVE_TO = bytes.fromhex("34000090")
-RESPOSE_MOVE_TO = bytes.fromhex("34000091")
-
-COMMAND_MOVE = bytes.fromhex("2d000090")
-
-GET_ROOMS = bytes.fromhex("01000091")
-GET_ROLLERS = bytes.fromhex("03000091")
+TYPES = {
+    "A": "AC motor",
+    "B": "Hub/Gateway",
+    "C": "Curtain motor",
+    "D": "DC motor",
+    "S": "Socket",
+    "L": "Lighting devices",
+}

@@ -2,7 +2,7 @@
 import logging
 
 from aiopulse.hub import Hub
-from aiopulse.elements import Roller, Room, Scene
+from aiopulse.elements import Roller
 from aiopulse.errors import (
     CannotConnectException,
     NotConnectedException,
@@ -14,15 +14,12 @@ from aiopulse.const import UpdateType
 __all__ = [
     "Hub",
     "Roller",
-    "Room",
-    "Scene",
     "CannotConnectException",
     "NotConnectedException",
     "NotRunningException",
     "InvalidResponseException",
     "UpdateType",
 ]
-__version__ = "0.4.0"
-__author__ = "Alan Murray"
+__version__ = "0.5.0"
 
 _LOGGER = logging.getLogger(__name__)
