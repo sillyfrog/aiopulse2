@@ -49,3 +49,7 @@ TYPES = {
     "S": "Socket",
     "L": "Lighting devices",
 }
+
+MOVING_UP = -1
+MOVING_DOWN = 1
+STOPPED = 0

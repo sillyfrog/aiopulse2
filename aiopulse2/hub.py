@@ -5,7 +5,7 @@ import json
 import logging
 import ssl
 import time
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Dict
 
 import async_timeout
 import websockets
@@ -37,7 +37,7 @@ class Hub:
         self.serialok = False
         self.lastserialerror = None
 
-        self.name = "Automate Pulse v2 Hub"
+        self.name = None
         self.id = None
         self.host = host
         self.wsuri = "wss://{}:443/rpc".format(self.host)
@@ -68,7 +68,8 @@ class Hub:
 
     def callback_subscribe(self, callback: Callable):
         """Add a callback for hub updates."""
-        self.update_callbacks.append(callback)
+        if callback not in self.update_callbacks:
+            self.update_callbacks.append(callback)
 
     def callback_unsubscribe(self, callback: Callable):
         """Remove a callback for hub updates."""
@@ -104,7 +105,7 @@ class Hub:
     def notify_callback(self, update_type=None):
         """Tell callback that the hub has been updated."""
         for callback in self.update_callbacks:
-            self.async_add_job(callback, update_type)
+            self.async_add_job(callback, self, update_type)
 
     async def disconnect(self):
         """Disconnect from the hub."""
@@ -168,7 +169,7 @@ class Hub:
                 writer.close()
                 # Sleep 10 seconds to wait for things to settle down before maybe trying again
                 await asyncio.sleep(10)
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
         except Exception as e:
             _LOGGER.info(f"Error in serial running: {e}")
@@ -182,7 +183,7 @@ class Hub:
         self.serialrunning = True
         asyncio.create_task(self.serialrunner())
 
-    async def send_payload(self, jscommand: dict):
+    async def send_payload(self, jscommand: Dict):
         """Send payload to the hub
 
         See sendws for details.
@@ -192,7 +193,7 @@ class Hub:
         await self.handshake.wait()
         await self.sendws(jscommand)
 
-    async def sendws(self, jscommand: dict):
+    async def sendws(self, jscommand: Dict):
         """Send jscommand over the websocket
 
         jscommand must be a Python dict, that will be converted to JSON
@@ -210,6 +211,18 @@ class Hub:
             )
             await asyncio.sleep(self.heartbeatinterval)
 
+    def applychanges(self, obj: Any, newvalues: Dict[str, Any]) -> bool:
+        """Applies and reports changes from newvals to the attributes of obj
+
+        Returns True if there were any changes, False otherwise.
+        """
+        updated = False
+        for attr, val in newvalues.items():
+            if getattr(obj, attr) != val:
+                setattr(obj, attr, val)
+                updated = True
+        return updated
+
     async def wsconsumer(self, msg: str):
         jsmsg = json.loads(msg)
         # print(json.dumps(jsmsg, indent="  "))
@@ -221,11 +234,14 @@ class Hub:
             _LOGGER.info(f"Connected to {self.host}")
             self.lasterrorlog = None
         data = jsmsg["result"]["reported"]
-        self.name = data["name"]
-        self.id = data["hubId"]
-        self.mac_address = data["mac"]
-        self.firmware_ver = data["firmware"]["version"]
-        self.model = data["mfi"]["model"]
+        newvals = {
+            "name": data["name"],
+            "id": data["hubId"],
+            "mac_address": data["mac"],
+            "firmware_ver": data["firmware"]["version"],
+            "model": data["mfi"]["model"],
+        }
+        hubchanges = self.applychanges(self, newvals)
 
         for rollerid, roller in data["shades"].items():
             fresh = False
@@ -234,6 +250,8 @@ class Hub:
                 self.unknown_rollers.add(rollerid)
                 fresh = True
                 await self.runserial()
+                hubchanges = True
+
             newvals = {
                 "signal": roller["rs"],
                 "moving": not roller["is"],
@@ -248,15 +266,11 @@ class Hub:
                     newvals["devicetype"] = const.TYPES.get(batteryinfo.group("type"))
                     newvals["version"] = batteryinfo.group("version")
 
-            # Update the roller object, and track if there were any changes
-            updated = False
-            for attr, val in newvals.items():
-                if getattr(self.rollers[rollerid], attr) != val:
-                    setattr(self.rollers[rollerid], attr, val)
-                    updated = True
-
-            if updated:
+            if self.applychanges(self.rollers[rollerid], newvals):
                 self.rollers[rollerid].notify_callback()
+
+        if hubchanges:
+            self.notify_callback()
 
     async def run(self):
         """Start hub by connecting then awaiting for messages.

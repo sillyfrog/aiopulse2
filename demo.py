@@ -64,9 +64,15 @@ class HubPrompt(cmd.Cmd):
         await hub.run()
         print("Hub added to prompt")
 
-    async def hub_update_callback(self, update_type):
+    async def hub_update_callback(self, hub, update_type):
         """Called when a hub reports that its information is updated."""
-        print(f"Hub {update_type.name} updated")
+        print(f"Hub {hub.name!r}, type {update_type} updated")
+        for roller in hub.rollers.values():
+            roller.callback_subscribe(self.roller_update_callback)
+
+    async def roller_update_callback(self, roller):
+        """Called when a roller reports it has updated"""
+        print(f"Roller Updated: {roller}")
 
     def _get_roller(self, args):
         """Return roller based on string argument."""
