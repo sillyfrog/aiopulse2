@@ -1,16 +1,14 @@
-"""Pip setup file for aiopulse library."""
+"""Pip setup file for aiopulse2 library."""
 from distutils.core import setup
 
 setup(
-    name="aiopulse",
-    packages=["aiopulse"],
-    version="0.4.0",
+    name="aiopulse2",
+    packages=["aiopulse2"],
+    version="0.5.0",
     license="apache-2.0",
     description="Python module for Rollease Acmeda Automate integration.",
-    author="Alan Murray",
-    author_email="pypi@atmurray.net",
-    url="https://github.com/atmurray/aiopulse",
-    download_url="https://github.com/atmurray/aiopulse/archive/v0.4.0.tar.gz",
+    url="https://github.com/sillyfrog/aiopulse2",
+    # download_url="https://github.com/sillyfrog/aiopulse2/archive/v0.4.0.tar.gz",
     keywords=["automation"],
     install_requires=["asyncio", "async_timeout"],
     classifiers=[

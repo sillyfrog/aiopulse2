@@ -2,14 +2,12 @@
 """Demo."""
 import asyncio
 import cmd
-import logging
-
-import aiopulse
 import functools
-
+import logging
 from typing import Any, Callable, Optional
 
-from aiopulse import _LOGGER
+import aiopulse2
+from aiopulse2 import _LOGGER
 
 
 class HubPrompt(cmd.Cmd):
@@ -60,7 +58,7 @@ class HubPrompt(cmd.Cmd):
 
     async def add_hub(self, hubip):
         """Add a hub to the prompt."""
-        hub = aiopulse.Hub(hubip)
+        hub = aiopulse2.Hub(hubip)
         self.hubs[hub.id] = hub
         hub.callback_subscribe(self.hub_update_callback)
         await hub.run()
@@ -82,12 +80,6 @@ class HubPrompt(cmd.Cmd):
                 "Format is <hub index> <roller index>. See 'list' for the index of each device."
             )
             return None
-
-    def do_update(self, args):
-        """Command to ask all hubs to send their information."""
-        for hub in self.hubs.values():
-            print("Sending update command to hub {}".format(hub.id))
-            self.add_job(hub.update)
 
     def do_list(self, args):
         """Command to list all hubs and rollers."""

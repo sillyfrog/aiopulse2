@@ -1,13 +1,14 @@
 """Elements that hang off the hub."""
-from typing import List, Callable
-
 import time
+from typing import Callable, List
+
+from .hub import Hub
 
 
 class Roller:
     """Representation of a Roller blind."""
 
-    def __init__(self, hub, roller_id):
+    def __init__(self, hub: Hub, roller_id: str):
         """Init a new roller blind."""
         self.hub = hub
         self.id = roller_id
@@ -39,11 +40,11 @@ class Roller:
             self.battery,
         )
 
-    def callback_subscribe(self, callback):
+    def callback_subscribe(self, callback: Callable):
         """Add a callback for hub updates."""
         self.update_callbacks.append(callback)
 
-    def callback_unsubscribe(self, callback):
+    def callback_unsubscribe(self, callback: Callable):
         """Remove a callback for hub updates."""
         if callback in self.update_callbacks:
             self.update_callbacks.remove(callback)
@@ -53,13 +54,13 @@ class Roller:
         for callback in self.update_callbacks:
             self.hub.async_add_job(callback)
 
-    def set_signal(self, signal):
+    def set_signal(self, signal: str):
         """Sets the signal as an int from a hex value"""
         if type(signal) is not int:
             signal = int(signal, 16)
         self.signal = signal
 
-    async def move_to(self, percent):
+    async def move_to(self, percent: int):
         """Send command to move the roller to a percentage closed."""
         await self.hub.send_payload(
             {

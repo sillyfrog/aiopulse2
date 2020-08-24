@@ -1,45 +1,51 @@
 """Acmeda Pulse Hub Interface."""
 import asyncio
-import binascii
-import logging
-from typing import Any, List, Callable, Optional
 import functools
-import websockets
-import ssl
 import json
+import logging
+import ssl
 import time
+from typing import Any, Callable, List, Optional
 
 import async_timeout
+import websockets
 
-import aiopulse.const as const
-import aiopulse.utils as utils
-import aiopulse.errors as errors
-import aiopulse.elements as elements
-import aiopulse.transport
+from . import const
+from . import elements
+from . import errors
 
 _LOGGER = logging.getLogger(__name__)
+
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
 
 class Hub:
     """Representation of an Acmeda Pulse v2 Hub."""
 
-    def __init__(self, host, loop: Optional[asyncio.events.AbstractEventLoop] = None):
+    def __init__(
+        self, host: str, loop: Optional[asyncio.events.AbstractEventLoop] = None
+    ):
         """Init the hub."""
         self.loop: asyncio.events.AbstractEventLoop = (loop or asyncio.get_event_loop())
         self.handshake = asyncio.Event()
         self.response_task = None
         self.running = False
+        self.connected = False
+        self.lasterrorlog = None
+        self.serialok = False
+        self.lastserialerror = None
 
         self.name = "Automate Pulse v2 Hub"
         self.id = None
         self.host = host
+        self.wsuri = "wss://{}:443/rpc".format(self.host)
         self.mac_address = None
         self.firmware_ver = None
         self.model = None
 
         self.ws = None
-
-        self.protocol = aiopulse.transport.HubTransportTcp(host)
 
         self.rollers = {}
         self.unknown_rollers = set()
@@ -47,6 +53,7 @@ class Hub:
 
         self.handshake.clear()
         self.update_callbacks: List[Callable] = []
+        self.heartbeatinterval = 2
 
     def __str__(self):
         """Returns string representation of the hub."""
@@ -59,11 +66,11 @@ class Hub:
             f"Model: {self.model} "
         )
 
-    def callback_subscribe(self, callback):
+    def callback_subscribe(self, callback: Callable):
         """Add a callback for hub updates."""
         self.update_callbacks.append(callback)
 
-    def callback_unsubscribe(self, callback):
+    def callback_unsubscribe(self, callback: Callable):
         """Remove a callback for hub updates."""
         if callback in self.update_callbacks:
             self.update_callbacks.remove(callback)
@@ -107,7 +114,7 @@ class Hub:
         self.handshake.clear()
         _LOGGER.info(f"{self.host}: Disconnected")
 
-    def response_parse(self, response):
+    def response_parse(self, response: str):
         """Decode response."""
         for name, matcher in const.ALL_RESPONSES.items():
             match = matcher.match(response)
@@ -125,13 +132,13 @@ class Hub:
         _LOGGER.debug(f"No match for: {response}")
 
     def handle_device_query_position_response(
-        self, id, closedpercent, tiltpercent, signal
+        self, id: str, closedpercent: str, tiltpercent: str, signal: str
     ):
         self.rollers[id].closed_percent = int(closedpercent)
         self.rollers[id].tilt_percent = int(tiltpercent)
         self.rollers[id].set_signal(signal)
 
-    def handle_device_query_name_response(self, id, name):
+    def handle_device_query_name_response(self, id: str, name: str):
         self.rollers[id].name = name
         self.unknown_rollers.discard(id)
         self.rollers[id].notify_callback()
@@ -175,9 +182,9 @@ class Hub:
         self.serialrunning = True
         asyncio.create_task(self.serialrunner())
 
-    async def send_payload(self, jscommand):
+    async def send_payload(self, jscommand: dict):
         """Send payload to the hub
-        
+
         See sendws for details.
         """
         if not self.running:
@@ -185,7 +192,7 @@ class Hub:
         await self.handshake.wait()
         await self.sendws(jscommand)
 
-    async def sendws(self, jscommand):
+    async def sendws(self, jscommand: dict):
         """Send jscommand over the websocket
 
         jscommand must be a Python dict, that will be converted to JSON
@@ -201,14 +208,18 @@ class Hub:
             await self.sendws(
                 {"method": "shadow", "src": "app", "id": int(time.time())}
             )
-            await asyncio.sleep(3)
+            await asyncio.sleep(self.heartbeatinterval)
 
-    async def wsconsumer(self, msg):
+    async def wsconsumer(self, msg: str):
         jsmsg = json.loads(msg)
         # print(json.dumps(jsmsg, indent="  "))
         if "result" not in jsmsg or "reported" not in jsmsg["result"]:
             _LOGGER.info(f"Got unknown WS response: {msg}")
             return
+        self.connected = True
+        if self.lasterrorlog is not None:
+            _LOGGER.info(f"Connected to {self.host}")
+            self.lasterrorlog = None
         data = jsmsg["result"]["reported"]
         self.name = data["name"]
         self.id = data["hubId"]
@@ -256,24 +267,41 @@ class Hub:
             _LOGGER.warning(f"{self.host}: Already running")
             return
         self.running = True
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        wsuri = "wss://{}:443/rpc".format(self.host)
+
         while self.running:
             try:
-                async with websockets.connect(wsuri, ssl=ssl_context) as websocket:
+                async with websockets.connect(self.wsuri, ssl=ssl_context) as websocket:
                     self.ws = websocket
                     asyncio.create_task(self.heartbeat())
                     self.handshake.set()
                     async for message in websocket:
                         await self.wsconsumer(message)
-            except websockets.WebSocketException as e:
+            except Exception as e:
                 self.ws = None
-                _LOGGER.error("Websocket Connection closed: {}".format(e))
+                if self.lasterrorlog != errors.CannotConnectException:
+                    _LOGGER.error("Websocket Connection closed: {}".format(e))
+                    self.lasterrorlog = errors.CannotConnectException
+                self.connected = False
                 await asyncio.sleep(10)
 
         _LOGGER.debug(f"{self.host}: Stopped")
+
+    async def test(self):
+        """Connect to the hub once, and check we get a valid response
+
+        Will raise an exception if unable to connect and get a response, or True
+        if connection succeeded.
+        """
+        async with websockets.connect(self.wsuri, ssl=ssl_context) as websocket:
+            self.ws = websocket
+            asyncio.create_task(self.heartbeat())
+            self.handshake.set()
+            async for message in websocket:
+                await self.wsconsumer(message)
+                if self.connected:
+                    return True
+                else:
+                    raise errors.InvalidResponseException
 
     async def stop(self):
         """Tell hub to stop and await for it to disconnect."""

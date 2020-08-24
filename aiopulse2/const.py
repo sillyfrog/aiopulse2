@@ -1,6 +1,6 @@
 """Acmeda Pulse Hub constants."""
-from enum import Enum
 import re
+from enum import Enum
 
 UpdateType = Enum("UpdateType", "info rollers rooms scenes timers")
 
