@@ -3,7 +3,7 @@ import time
 from typing import Callable, List
 
 from .hub import Hub
-from .const import MOVING_DOWN, MOVING_UP, STOPPED
+from .const import MovingAction
 
 
 class Roller:
@@ -23,20 +23,20 @@ class Roller:
         self.signal = None
         self.version = None
         self._moving = False
-        self.action = STOPPED
+        self.action = MovingAction.stopped
         self.online = True
         self.update_callbacks: List[Callable] = []
 
     def __str__(self):
         """Returns string representation of roller."""
-        if self.action == MOVING_DOWN:
+        if self.action == MovingAction.down:
             actiontxt = "down"
-        elif self.action == MOVING_UP:
+        elif self.action == MovingAction.up:
             actiontxt = "up"
         else:
             actiontxt = "stopped"
         return (
-            "Name: {!r} ID: {} Type: {} Target %: {} Closed %: {} Tilt %: {} Signal RSSI: {} Battery: {}v Action: {}"
+            "Name: {!r} ID: {} Type: {} Target %: {} Closed %: {} Tilt %: {} Signal RSSI: {} Battery: {}v Battery %: {} Action: {}"
         ).format(
             self.name,
             self.id,
@@ -46,8 +46,26 @@ class Roller:
             self.tilt_percent,
             self.signal,
             self.battery,
+            self.battery_percent,
             actiontxt,
         )
+
+    @property
+    def battery_percent(self):
+        """A rough approximation base on the app vs voltage levels read.
+
+        Returns None if they devicetype is not D (DC motor), as there is no battery.
+
+        Should be updated if a better solution is found.
+        """
+        if self.devicetypeshort != "D":
+            return None
+        percent = int(27.4 * self.battery - 255)
+        if percent < 0:
+            percent = 0
+        elif percent > 100:
+            percent = 100
+        return percent
 
     @property
     def moving(self):
@@ -57,15 +75,15 @@ class Roller:
     def moving(self, new_val):
         self._moving = new_val
         if self._moving:
-            if self.action == STOPPED:
+            if self.action == MovingAction.stopped:
                 # Guess as to the direction
                 if self.closed_percent > 50:
-                    self.action = MOVING_UP
+                    self.action = MovingAction.up
                 else:
-                    self.action = MOVING_DOWN
+                    self.action = MovingAction.down
         else:
-            if self.action != STOPPED:
-                self.action = STOPPED
+            if self.action != MovingAction.stopped:
+                self.action = MovingAction.stopped
             self.target_closed_percent = self.closed_percent
 
     def callback_subscribe(self, callback: Callable):
@@ -95,12 +113,14 @@ class Roller:
         if currentpcg is None:
             currentpcg = 50
         if percent > currentpcg:
-            self.action = MOVING_DOWN
+            self.action = MovingAction.down
         elif percent < currentpcg:
-            self.action = MOVING_UP
+            self.action = MovingAction.up
         else:
-            self.action = STOPPED
+            self.action = MovingAction.stopped
+        self._moving = True
         self.target_closed_percent = percent
+        self.notify_callback()
         await self.hub.send_payload(
             {
                 "method": "shadow",

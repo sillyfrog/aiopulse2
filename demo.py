@@ -169,6 +169,8 @@ class HubPrompt(cmd.Cmd):
         """Command to exit."""
         print("Exiting")
         self.running = False
+        for hub in self.hubs.values():
+            self.async_add_job(hub.stop())
         return True
 
 

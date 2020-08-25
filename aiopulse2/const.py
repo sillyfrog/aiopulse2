@@ -50,6 +50,4 @@ TYPES = {
     "L": "Lighting devices",
 }
 
-MOVING_UP = -1
-MOVING_DOWN = 1
-STOPPED = 0
+MovingAction = Enum("MovingAction", "stopped up down")

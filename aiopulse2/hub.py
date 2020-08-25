@@ -198,11 +198,12 @@ class Hub:
 
         jscommand must be a Python dict, that will be converted to JSON
         """
-        try:
-            await self.ws.send(json.dumps(jscommand))
-        except websockets.WebSocketException as e:
-            _LOGGER.error("Error sending payload: {}".format(e))
-            self.handshake.clear()
+        if self.ws:
+            try:
+                await self.ws.send(json.dumps(jscommand))
+            except websockets.WebSocketException as e:
+                _LOGGER.error("Error sending payload: {}".format(e))
+                self.handshake.clear()
 
     async def heartbeat(self):
         while self.ws and self.ws.open:
@@ -292,11 +293,12 @@ class Hub:
                         await self.wsconsumer(message)
             except Exception as e:
                 self.ws = None
-                if self.lasterrorlog != errors.CannotConnectException:
+                if self.running and self.lasterrorlog != errors.CannotConnectException:
                     _LOGGER.error("Websocket Connection closed: {}".format(e))
                     self.lasterrorlog = errors.CannotConnectException
                 self.connected = False
-                await asyncio.sleep(10)
+                if self.running:
+                    await asyncio.sleep(10)
 
         _LOGGER.debug(f"{self.host}: Stopped")
 
