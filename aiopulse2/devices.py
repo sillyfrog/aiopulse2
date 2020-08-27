@@ -1,18 +1,18 @@
-"""Acmeda Pulse Hub Interface."""
+"""Acmeda Pulse Hub and Rollers Interfaces."""
+# Note, these are in the same file to prevent circular imports
 import asyncio
 import functools
 import json
 import logging
 import ssl
 import time
-from typing import Any, Callable, List, Optional, Dict
+from typing import Any, Callable, Dict, List, Optional
 
 import async_timeout
 import websockets
 
-from . import const
-from . import elements
-from . import errors
+from . import const, errors
+from .const import MovingAction
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,12 +24,16 @@ ssl_context.verify_mode = ssl.CERT_NONE
 class Hub:
     """Representation of an Acmeda Pulse v2 Hub."""
 
-    def __init__(
-        self, host: str, loop: Optional[asyncio.events.AbstractEventLoop] = None
-    ):
-        """Init the hub."""
-        self.loop: asyncio.events.AbstractEventLoop = (loop or asyncio.get_event_loop())
+    def __init__(self, host: str, delay_callbacks: bool = True):
+        """Init the hub.
+        
+        host: The IP address / hostname of hub
+        delay_callbacks: If True (default), no callbacks will be called until the
+            inital hub sync is complete, getting details such as the device name
+        """
+        self.loop = asyncio.get_event_loop()
         self.handshake = asyncio.Event()
+        self.delay_callbacks = delay_callbacks
         self.response_task = None
         self.running = False
         self.connected = False
@@ -49,6 +53,8 @@ class Hub:
 
         self.rollers = {}
         self.unknown_rollers = set()
+        self.rollers_known = asyncio.Event()
+        self.rollers_known.clear()
         self.serialrunning = False
 
         self.handshake.clear()
@@ -102,10 +108,12 @@ class Hub:
 
         return task
 
-    def notify_callback(self, update_type=None):
+    def notify_callback(self):
         """Tell callback that the hub has been updated."""
+        if self.delay_callbacks and self.unknown_rollers:
+            return
         for callback in self.update_callbacks:
-            self.async_add_job(callback, self, update_type)
+            self.async_add_job(callback, self)
 
     async def disconnect(self):
         """Disconnect from the hub."""
@@ -143,6 +151,10 @@ class Hub:
         self.rollers[id].name = name
         self.unknown_rollers.discard(id)
         self.rollers[id].notify_callback()
+        if not self.unknown_rollers:
+            # The list of unknown_rollers is empty
+            self.rollers_known.set()
+            self.notify_callback()
 
     async def serialrunner(self):
         """The running to get all required information from the hub
@@ -152,6 +164,7 @@ class Hub:
         self.serialrunning = True
         try:
             while self.unknown_rollers:
+                self.rollers_known.clear()  # We have some unknown rollers
                 reader, writer = await asyncio.open_connection(self.host, port=1487)
                 # Send off a request for all of the unknown rollers
                 for rollerid in self.unknown_rollers:
@@ -247,7 +260,7 @@ class Hub:
         for rollerid, roller in data["shades"].items():
             fresh = False
             if rollerid not in self.rollers:
-                self.rollers[rollerid] = elements.Roller(self, rollerid)
+                self.rollers[rollerid] = Roller(self, rollerid)
                 self.unknown_rollers.add(rollerid)
                 fresh = True
                 await self.runserial()
@@ -302,9 +315,11 @@ class Hub:
 
         _LOGGER.debug(f"{self.host}: Stopped")
 
-    async def test(self):
+    async def test(self, update_devices=False):
         """Connect to the hub once, and check we get a valid response
 
+        update_devices: if True, will wait until the initial full update is complete
+        and the rollers have had their initial information populated.
         Will raise an exception if unable to connect and get a response, or True
         if connection succeeded.
         """
@@ -315,9 +330,15 @@ class Hub:
             async for message in websocket:
                 await self.wsconsumer(message)
                 if self.connected:
-                    return True
+                    break
                 else:
                     raise errors.InvalidResponseException
+        # Now connected, wait for the initial device listing to be populated
+        if update_devices:
+            await self.rollers_known.wait()
+        self.ws = None
+        self.connected = False
+        return True
 
     async def stop(self):
         """Tell hub to stop and await for it to disconnect."""
@@ -327,3 +348,151 @@ class Hub:
         _LOGGER.debug(f"{self.host}: Stopping")
         self.running = False
         await self.disconnect()
+
+
+class Roller:
+    """Representation of a Roller blind."""
+
+    def __init__(self, hub: Hub, roller_id: str):
+        """Init a new roller blind."""
+        self.hub = hub
+        self.id = roller_id
+        self.name = None
+        self.devicetypeshort = None
+        self.devicetype = None
+        self.battery = None
+        self.target_closed_percent = None
+        self.closed_percent = None
+        self.tilt_percent = None
+        self.signal = None
+        self.version = None
+        self._moving = False
+        self.action = MovingAction.stopped
+        self.online = True
+        self.update_callbacks: List[Callable] = []
+
+    def __str__(self):
+        """Returns string representation of roller."""
+        if self.action == MovingAction.down:
+            actiontxt = "down"
+        elif self.action == MovingAction.up:
+            actiontxt = "up"
+        else:
+            actiontxt = "stopped"
+        return (
+            "Name: {!r} ID: {} Type: {} Target %: {} Closed %: {} Tilt %: {} Signal RSSI: {} Battery: {}v Battery %: {} Action: {}"
+        ).format(
+            self.name,
+            self.id,
+            self.devicetype,
+            self.target_closed_percent,
+            self.closed_percent,
+            self.tilt_percent,
+            self.signal,
+            self.battery,
+            self.battery_percent,
+            actiontxt,
+        )
+
+    @property
+    def battery_percent(self):
+        """A rough approximation base on the app vs voltage levels read.
+
+        Returns None if they devicetype is not D (DC motor), as there is no battery.
+
+        Should be updated if a better solution is found.
+        """
+        if self.devicetypeshort != "D":
+            return None
+        percent = int(27.4 * self.battery - 255)
+        if percent < 0:
+            percent = 0
+        elif percent > 100:
+            percent = 100
+        return percent
+
+    @property
+    def moving(self):
+        return self._moving
+
+    @moving.setter
+    def moving(self, new_val):
+        self._moving = new_val
+        if self._moving:
+            if self.action == MovingAction.stopped:
+                # Guess as to the direction
+                if self.closed_percent > 50:
+                    self.action = MovingAction.up
+                else:
+                    self.action = MovingAction.down
+        else:
+            if self.action != MovingAction.stopped:
+                self.action = MovingAction.stopped
+            self.target_closed_percent = self.closed_percent
+
+    def callback_subscribe(self, callback: Callable):
+        """Add a callback for hub updates."""
+        if callback not in self.update_callbacks:
+            self.update_callbacks.append(callback)
+
+    def callback_unsubscribe(self, callback: Callable):
+        """Remove a callback for hub updates."""
+        if callback in self.update_callbacks:
+            self.update_callbacks.remove(callback)
+
+    def notify_callback(self):
+        """Tell callback that device has been updated."""
+        if self.hub.delay_callbacks and self.name is None:
+            return
+        for callback in self.update_callbacks:
+            self.hub.async_add_job(callback, self)
+
+    def set_signal(self, signal: str):
+        """Sets the signal as an int from a hex value"""
+        if type(signal) is not int:
+            signal = int(signal, 16)
+        self.signal = signal
+
+    async def move_to(self, percent: int):
+        """Send command to move the roller to a percentage closed."""
+        currentpcg = self.closed_percent
+        if currentpcg is None:
+            currentpcg = 50
+        if percent > currentpcg:
+            self.action = MovingAction.down
+        elif percent < currentpcg:
+            self.action = MovingAction.up
+        else:
+            self.action = MovingAction.stopped
+        self._moving = True
+        self.target_closed_percent = percent
+        self.notify_callback()
+        await self.hub.send_payload(
+            {
+                "method": "shadow",
+                "args": {
+                    "desired": {"shades": {self.id: {"movePercent": int(percent)}}},
+                    "timeStamp": time.time(),
+                },
+            }
+        )
+
+    async def move_up(self):
+        """Send command to move the roller to fully open."""
+        await self.move_to(0)
+
+    async def move_down(self):
+        """Send command to move the roller to fully closed."""
+        await self.move_to(100)
+
+    async def move_stop(self):
+        """Send command to stop the roller."""
+        await self.hub.send_payload(
+            {
+                "method": "shadow",
+                "args": {
+                    "desired": {"shades": {self.id: {"stopShade": True}}},
+                    "timeStamp": time.time(),
+                },
+            }
+        )

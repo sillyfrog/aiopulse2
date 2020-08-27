@@ -1,15 +1,14 @@
 """Rollease Acmeda Automate Pulse asyncio protocol implementation."""
 import logging
 
-from .const import UpdateType, MovingAction
-from .elements import Roller
+from .const import MovingAction, UpdateType
+from .devices import Hub, Roller
 from .errors import (
     CannotConnectException,
     InvalidResponseException,
     NotConnectedException,
     NotRunningException,
 )
-from .hub import Hub
 
 __all__ = [
     "Hub",

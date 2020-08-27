@@ -15,14 +15,15 @@ async def main():
     for host in hosts:
         try:
             hub = aiopulse2.Hub(host)
-            result = await hub.test()
+            result = await hub.test(True)
             if result:
-                msg = f"OK ({hub.name!r})"
+                print(f"Host: {host}: {hub}")
+                for roller in hub.rollers.values():
+                    print(f"    {roller}")
             else:
-                msg = "Unknown error"
+                print(f"Host: {host}: Unknown Error")
         except Exception as e:
-            msg = f"Error: {e}"
-        print(f"Host: {host}: {msg}")
+            print(f"Host: {host}: Error ({e})")
 
 
 if __name__ == "__main__":

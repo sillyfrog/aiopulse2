@@ -61,12 +61,15 @@ class HubPrompt(cmd.Cmd):
         hub = aiopulse2.Hub(hubip)
         self.hubs[hub.id] = hub
         hub.callback_subscribe(self.hub_update_callback)
-        await hub.run()
+        # Test we can connect OK first.
+        self.add_job(hub.run)
+        # Wait until we have the rollers setup initially
+        await hub.rollers_known.wait()
         print("Hub added to prompt")
 
-    async def hub_update_callback(self, hub, update_type):
+    async def hub_update_callback(self, hub):
         """Called when a hub reports that its information is updated."""
-        print(f"Hub {hub.name!r}, type {update_type} updated")
+        print(f"Hub {hub.name!r} updated")
         for roller in hub.rollers.values():
             roller.callback_subscribe(self.roller_update_callback)
 
