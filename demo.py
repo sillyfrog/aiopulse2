@@ -4,6 +4,7 @@ import asyncio
 import cmd
 import functools
 import logging
+import json
 from typing import Any, Callable, Optional
 
 import aiopulse2
@@ -135,6 +136,12 @@ class HubPrompt(cmd.Cmd):
         if roller:
             print("Sending blind stop to {}".format(roller.name))
             self.add_job(roller.move_stop)
+
+    def do_send(self, sargs):
+        """Send a raw command to each hub."""
+        jsargs = json.loads(sargs)
+        for hub in self.hubs.values():
+            self.add_job(hub.send_payload, jsargs)
 
     def do_connect(self, sargs):
         """Command to connect all hubs."""

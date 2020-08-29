@@ -56,6 +56,8 @@ class Hub:
         self.rollers_known = asyncio.Event()
         self.rollers_known.clear()
         self.serialrunning = False
+        self.sent_details_request = set()
+        self.payload_queue = []
 
         self.handshake.clear()
         self.update_callbacks: List[Callable] = []
@@ -206,24 +208,40 @@ class Hub:
         await self.handshake.wait()
         await self.sendws(jscommand)
 
-    async def sendws(self, jscommand: Dict):
+    async def sendws(self, jscommand: Dict) -> bool:
         """Send jscommand over the websocket
 
         jscommand must be a Python dict, that will be converted to JSON
+        Returns True on success
         """
         if self.ws:
             try:
                 await self.ws.send(json.dumps(jscommand))
+                return True
             except websockets.WebSocketException as e:
                 _LOGGER.error("Error sending payload: {}".format(e))
                 self.handshake.clear()
+        return False
 
     async def heartbeat(self):
-        while self.ws and self.ws.open:
-            await self.sendws(
-                {"method": "shadow", "src": "app", "id": int(time.time())}
-            )
+        reset_request_counter = 3600 / self.heartbeatinterval
+        while self.running:
+            if self.ws and self.ws.open and self.handshake.is_set():
+                if self.payload_queue:
+                    payload = self.payload_queue.pop(0)
+                    success = await self.sendws(payload)
+                    if not success:
+                        self.payload_queue.append(payload)
+                await self.sendws(
+                    {"method": "shadow", "src": "app", "id": int(time.time())}
+                )
             await asyncio.sleep(self.heartbeatinterval)
+            reset_request_counter -= 1
+            if reset_request_counter <= 0:
+                # About once an hour allow a request to be made to the hub to get the
+                # rollers details again
+                self.sent_details_request.clear()
+                reset_request_counter = 3600 / self.heartbeatinterval
 
     def applychanges(self, obj: Any, newvalues: Dict[str, Any]) -> bool:
         """Applies and reports changes from newvals to the attributes of obj
@@ -248,6 +266,7 @@ class Hub:
             _LOGGER.info(f"Connected to {self.host}")
             self.lasterrorlog = None
         data = jsmsg["result"]["reported"]
+        _LOGGER.debug("Got payload: %s", data)
         newvals = {
             "name": data["name"],
             "id": data["hubId"],
@@ -258,24 +277,37 @@ class Hub:
         hubchanges = self.applychanges(self, newvals)
 
         for rollerid, roller in data["shades"].items():
-            fresh = False
             if rollerid not in self.rollers:
                 self.rollers[rollerid] = Roller(self, rollerid)
                 self.unknown_rollers.add(rollerid)
-                fresh = True
                 await self.runserial()
                 hubchanges = True
 
             newvals = {
-                "signal": roller["rs"],
-                "moving": not roller["is"],
-                "online": roller["ol"],
-                "closed_percent": int(roller["mp"]),
+                "signal": roller.get("rs"),
+                "moving": not roller.get("is", True),
+                "online": roller.get("ol", False),
+                "closed_percent": int(roller.get("mp", 100)),
             }
-            batteryinfo = const.WS_ROLLER_VOLTAGE.match(roller["vo"])
-            if batteryinfo:
-                newvals["battery"] = float(batteryinfo.group("voltage"))
-                if fresh:
+            if "vo" not in roller:
+                # The voltage and version key is missing, request more details if
+                # not already sent. If this request is not made, it will typically
+                # be sent through with in about 20 minutes
+                if rollerid not in self.sent_details_request:
+                    self.payload_queue.append(
+                        {
+                            "method": "shadow",
+                            "args": {
+                                "desired": {"shades": {rollerid: {"query": True}}},
+                                "timeStamp": time.time(),
+                            },
+                        }
+                    )
+                    self.sent_details_request.add(rollerid)
+            else:
+                batteryinfo = const.WS_ROLLER_VOLTAGE.match(roller["vo"])
+                if batteryinfo:
+                    newvals["battery"] = float(batteryinfo.group("voltage"))
                     newvals["devicetypeshort"] = batteryinfo.group("type")
                     newvals["devicetype"] = const.TYPES.get(batteryinfo.group("type"))
                     newvals["version"] = batteryinfo.group("version")
@@ -296,11 +328,11 @@ class Hub:
             return
         self.running = True
 
+        asyncio.create_task(self.heartbeat())
         while self.running:
             try:
                 async with websockets.connect(self.wsuri, ssl=ssl_context) as websocket:
                     self.ws = websocket
-                    asyncio.create_task(self.heartbeat())
                     self.handshake.set()
                     async for message in websocket:
                         await self.wsconsumer(message)
@@ -323,6 +355,7 @@ class Hub:
         Will raise an exception if unable to connect and get a response, or True
         if connection succeeded.
         """
+        self.running = True
         async with websockets.connect(self.wsuri, ssl=ssl_context) as websocket:
             self.ws = websocket
             asyncio.create_task(self.heartbeat())
@@ -330,6 +363,7 @@ class Hub:
             async for message in websocket:
                 await self.wsconsumer(message)
                 if self.connected:
+                    self.running = False
                     break
                 else:
                     raise errors.InvalidResponseException
