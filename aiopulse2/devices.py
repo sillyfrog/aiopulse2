@@ -24,16 +24,21 @@ ssl_context.verify_mode = ssl.CERT_NONE
 class Hub:
     """Representation of an Acmeda Pulse v2 Hub."""
 
-    def __init__(self, host: str, delay_callbacks: bool = True):
+    def __init__(
+        self, host: str, delay_callbacks: bool = True, propagate_callbacks: bool = False
+    ):
         """Init the hub.
         
         host: The IP address / hostname of hub
         delay_callbacks: If True (default), no callbacks will be called until the
             inital hub sync is complete, getting details such as the device name
+        propagate_callbacks: If True, when there is a change to the hub, all roller 
+            callbacks are also notified.
         """
         self.loop = asyncio.get_event_loop()
         self.handshake = asyncio.Event()
         self.delay_callbacks = delay_callbacks
+        self.propagate_callbacks = propagate_callbacks
         self.response_task = None
         self.running = False
         self.connected = False
@@ -112,10 +117,13 @@ class Hub:
 
     def notify_callback(self):
         """Tell callback that the hub has been updated."""
-        if self.delay_callbacks and self.unknown_rollers:
+        if self.delay_callbacks and (self.unknown_rollers or len(self.rollers) == 0):
             return
         for callback in self.update_callbacks:
             self.async_add_job(callback, self)
+        if self.propagate_callbacks:
+            for roller in self.rollers.values():
+                roller.notify_callback()
 
     async def disconnect(self):
         """Disconnect from the hub."""
@@ -261,7 +269,9 @@ class Hub:
         if "result" not in jsmsg or "reported" not in jsmsg["result"]:
             _LOGGER.info(f"Got unknown WS response: {msg}")
             return
-        self.connected = True
+        if not self.connected:
+            self.connected = True
+            self.notify_callback()
         if self.lasterrorlog is not None:
             _LOGGER.info(f"Connected to {self.host}")
             self.lasterrorlog = None
@@ -342,6 +352,7 @@ class Hub:
                     _LOGGER.error("Websocket Connection closed: {}".format(e))
                     self.lasterrorlog = errors.CannotConnectException
                 self.connected = False
+                self.notify_callback()
                 if self.running:
                     await asyncio.sleep(10)
 
@@ -402,7 +413,7 @@ class Roller:
         self.version = None
         self._moving = False
         self.action = MovingAction.stopped
-        self.online = True
+        self.online = False
         self.update_callbacks: List[Callable] = []
 
     def __str__(self):
