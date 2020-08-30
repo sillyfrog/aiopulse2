@@ -1,22 +1,28 @@
 """Pip setup file for aiopulse2 library."""
-from distutils.core import setup
+import setuptools
 
-setup(
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+setuptools.setup(
     name="aiopulse2",
-    packages=["aiopulse2"],
+    packages=setuptools.find_packages(),
     version="0.5.0",
     license="apache-2.0",
-    description="Python module for Rollease Acmeda Automate integration.",
+    description="Rollease Acmeda Automate Pulse Hub v2 integration.",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     url="https://github.com/sillyfrog/aiopulse2",
-    # download_url="https://github.com/sillyfrog/aiopulse2/archive/v0.4.0.tar.gz",
+    download_url="https://github.com/sillyfrog/aiopulse2/archive/v0.5.0.tar.gz",
     keywords=["automation"],
-    install_requires=["asyncio", "async_timeout"],
+    install_requires=["async_timeout>=3.0", "websockets>=8.1"],
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Operating System :: OS Independent",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
     ],
+    python_requires=">=3.7",
 )

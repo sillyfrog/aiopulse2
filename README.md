@@ -1,17 +1,22 @@
-# Aiopulse 2
+# aiopulse2
 
 ## Asynchronous library to control Rollease Acmeda Automate roller blinds with the Pulse v2 Hub
 
-This is an updated fork of https://github.com/atmurray/aiopulse/
+This is an updated fork of (aiopulse)[https://github.com/atmurray/aiopulse/] for the v2 hub. The protocol implementation uses a combination of WebSockets and a TCP connection using a serial like protocol. See the project wiki page for details.
 
-Requires Python 3 and uses asyncio.
+Requires Python 3.7 or later and uses asyncio and (websockets)[https://pypi.org/project/websockets/].
+
+It has been primarily developed as an integration for (Home Assistant)[https://www.home-assistant.io/].
 
 ### Installing
 
-I plan on publishing this module to PiPy once I'm happy that it has been adequately tested.
-For now, from the folder containing setup.py run `python setup.py install`.
+Run `pip install aiopulse2`.
 
-### Demo.py commands:
+### Demo.py
+
+This is an interactive interface to test the integration. The available commands are listed below.
+
+Use the `list` command to get the id of the hubs/blinds.
 
 | Command                              | Description                                                                                                        |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
