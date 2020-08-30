@@ -2,7 +2,7 @@
 
 ## Asynchronous library to control Rollease Acmeda Automate roller blinds with the Pulse v2 Hub
 
-This is an updated fork of (aiopulse)[https://github.com/atmurray/aiopulse/] for the v2 hub. The protocol implementation uses a combination of WebSockets and a TCP connection using a serial like protocol. See the project wiki page for details.
+This is an updated fork of (aiopulse)[https://github.com/atmurray/aiopulse/] for the v2 hub (note: this is _not_ compatible with teh v1 hub, use `aiopulse` for that). The protocol implementation uses a combination of WebSockets and a TCP connection using a serial like protocol. See the project wiki page for details.
 
 Requires Python 3.7 or later and uses asyncio and (websockets)[https://pypi.org/project/websockets/].
 
