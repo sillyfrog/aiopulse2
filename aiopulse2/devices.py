@@ -227,7 +227,7 @@ class Hub:
                 await self.ws.send(json.dumps(jscommand))
                 return True
             except websockets.WebSocketException as e:
-                _LOGGER.error("Error sending payload: {}".format(e))
+                _LOGGER.warn("Error sending payload: {}".format(e))
                 self.handshake.clear()
         return False
 
@@ -265,7 +265,6 @@ class Hub:
 
     async def wsconsumer(self, msg: str):
         jsmsg = json.loads(msg)
-        # print(json.dumps(jsmsg, indent="  "))
         if "result" not in jsmsg or "reported" not in jsmsg["result"]:
             _LOGGER.info(f"Got unknown WS response: {msg}")
             return
@@ -349,7 +348,7 @@ class Hub:
             except Exception as e:
                 self.ws = None
                 if self.running and self.lasterrorlog != errors.CannotConnectException:
-                    _LOGGER.error("Websocket Connection closed: {}".format(e))
+                    _LOGGER.warning("Websocket Connection closed: {}".format(e))
                     self.lasterrorlog = errors.CannotConnectException
                 self.connected = False
                 self.notify_callback()
