@@ -16,6 +16,10 @@ from .const import MovingAction
 
 _LOGGER = logging.getLogger(__name__)
 
+# The minimum version above which we can trust the "ol" (online) value. Below this
+# version, the roller will always be reported as online
+ONLINE_MIN_VERSION = 13
+
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
@@ -28,11 +32,11 @@ class Hub:
         self, host: str, delay_callbacks: bool = True, propagate_callbacks: bool = False
     ):
         """Init the hub.
-        
+
         host: The IP address / hostname of hub
         delay_callbacks: If True (default), no callbacks will be called until the
             inital hub sync is complete, getting details such as the device name
-        propagate_callbacks: If True, when there is a change to the hub, all roller 
+        propagate_callbacks: If True, when there is a change to the hub, all roller
             callbacks are also notified.
         """
         self.loop = asyncio.get_event_loop()
@@ -127,11 +131,11 @@ class Hub:
 
     async def disconnect(self):
         """Disconnect from the hub."""
-        _LOGGER.debug(f"{self.host}: Disconnecting")
+        _LOGGER.debug("%s: Disconnecting", self.host)
         if self.ws:
             await self.ws.close()
         self.handshake.clear()
-        _LOGGER.info(f"{self.host}: Disconnected")
+        _LOGGER.info("%s: Disconnected", self.host)
 
     def response_parse(self, response: str):
         """Decode response."""
@@ -139,16 +143,18 @@ class Hub:
             match = matcher.match(response)
             if match:
                 _LOGGER.debug(
-                    f"{self.host}: Received response: {name} "
-                    f"content: {match.groups()}"
+                    "%s: Received response: %s content: %s",
+                    self.host,
+                    name,
+                    match.groups(),
                 )
                 handler = getattr(self, "handle_" + name.lower(), "")
                 if handler:
                     handler(**match.groupdict())
                 else:
-                    _LOGGER.debug(f"No handler for {name}")
+                    _LOGGER.debug("No handler for %s", name)
                 return
-        _LOGGER.debug(f"No match for: {response}")
+        _LOGGER.debug("No match for: %s", response)
 
     def handle_device_query_position_response(
         self, id: str, closedpercent: str, tiltpercent: str, signal: str
@@ -184,7 +190,7 @@ class Hub:
                     with async_timeout.timeout(3):
                         response = await reader.readuntil(b";")
                     if len(response) > 0:
-                        _LOGGER.debug(f"recv < {response}")
+                        _LOGGER.debug("recv < %s", response)
                         self.response_parse(response.decode())
                     else:
                         break
@@ -195,7 +201,7 @@ class Hub:
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
         except Exception as e:
-            _LOGGER.info(f"Error in serial running: {e}")
+            _LOGGER.info("Error in serial running: %s", e)
         self.serialrunning = False
 
     async def runserial(self):
@@ -224,10 +230,11 @@ class Hub:
         """
         if self.ws:
             try:
-                await self.ws.send(json.dumps(jscommand))
+                with async_timeout.timeout(10):
+                    await self.ws.send(json.dumps(jscommand))
                 return True
-            except websockets.WebSocketException as e:
-                _LOGGER.warn("Error sending payload: {}".format(e))
+            except (websockets.WebSocketException, asyncio.TimeoutError) as e:
+                _LOGGER.warn("Error sending payload: %s", e)
                 self.handshake.clear()
         return False
 
@@ -266,13 +273,13 @@ class Hub:
     async def wsconsumer(self, msg: str):
         jsmsg = json.loads(msg)
         if "result" not in jsmsg or "reported" not in jsmsg["result"]:
-            _LOGGER.info(f"Got unknown WS response: {msg}")
+            _LOGGER.info("Got unknown WS response: %s", msg)
             return
         if not self.connected:
             self.connected = True
             self.notify_callback()
         if self.lasterrorlog is not None:
-            _LOGGER.info(f"Connected to {self.host}")
+            _LOGGER.info("Connected to %s", self.host)
             self.lasterrorlog = None
         data = jsmsg["result"]["reported"]
         _LOGGER.debug("Got payload: %s", data)
@@ -321,6 +328,13 @@ class Hub:
                     newvals["devicetype"] = const.TYPES.get(batteryinfo.group("type"))
                     newvals["version"] = batteryinfo.group("version")
 
+            try:
+                version = int(newvals.get("version") or self.rollers[rollerid].version)
+                if version < ONLINE_MIN_VERSION:
+                    newvals["online"] = True
+            except Exception:
+                pass
+
             if self.applychanges(self.rollers[rollerid], newvals):
                 self.rollers[rollerid].notify_callback()
 
@@ -333,7 +347,7 @@ class Hub:
         Runs until the stop() method is called.
         """
         if self.running:
-            _LOGGER.warning(f"{self.host}: Already running")
+            _LOGGER.warning("%s: Already running", self.host)
             return
         self.running = True
 
@@ -348,14 +362,14 @@ class Hub:
             except Exception as e:
                 self.ws = None
                 if self.running and self.lasterrorlog != errors.CannotConnectException:
-                    _LOGGER.warning("Websocket Connection closed: {}".format(e))
+                    _LOGGER.warning("Websocket Connection closed: %s", e)
                     self.lasterrorlog = errors.CannotConnectException
                 self.connected = False
                 self.notify_callback()
                 if self.running:
                     await asyncio.sleep(10)
 
-        _LOGGER.debug(f"{self.host}: Stopped")
+        _LOGGER.debug("%s: Stopped", self.host)
 
     async def test(self, update_devices=False):
         """Connect to the hub once, and check we get a valid response
@@ -387,9 +401,9 @@ class Hub:
     async def stop(self):
         """Tell hub to stop and await for it to disconnect."""
         if not self.running:
-            _LOGGER.warning(f"{self.host}: Already stopped")
+            _LOGGER.warning("%s: Already stopped", self.host)
             return
-        _LOGGER.debug(f"{self.host}: Stopping")
+        _LOGGER.debug("%s: Stopping", self.host)
         self.running = False
         await self.disconnect()
 
@@ -446,7 +460,7 @@ class Roller:
 
         Should be updated if a better solution is found.
         """
-        if self.devicetypeshort != "D":
+        if not self.has_battery or not self.battery:
             return None
         percent = int(27.4 * self.battery - 255)
         if percent < 0:
@@ -454,6 +468,11 @@ class Roller:
         elif percent > 100:
             percent = 100
         return percent
+
+    @property
+    def has_battery(self):
+        """True if device appears to be battery operated"""
+        return self.devicetypeshort == "D"
 
     @property
     def moving(self):
