@@ -17,8 +17,9 @@ from .const import MovingAction
 _LOGGER = logging.getLogger(__name__)
 
 # The minimum version above which we can trust the "ol" (online) value. Below this
-# version, the roller will always be reported as online
-ONLINE_MIN_VERSION = 13
+# version, the roller will always be reported as online and the position reported will
+# be optimistic (ie: not read from the roller)
+ONLINE_MIN_VERSION = 11
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 ssl_context.check_hostname = False
@@ -159,8 +160,8 @@ class Hub:
     def handle_device_query_position_response(
         self, id: str, closedpercent: str, tiltpercent: str, signal: str
     ):
-        self.rollers[id].closed_percent = int(closedpercent)
-        self.rollers[id].tilt_percent = int(tiltpercent)
+        self.rollers[id].closed_percent = forcetoint(closedpercent)
+        self.rollers[id].tilt_percent = forcetoint(tiltpercent)
         self.rollers[id].set_signal(signal)
 
     def handle_device_query_name_response(self, id: str, name: str):
@@ -329,9 +330,12 @@ class Hub:
                     newvals["version"] = batteryinfo.group("version")
 
             try:
-                version = int(newvals.get("version") or self.rollers[rollerid].version)
+                version = int(
+                    newvals.get("version") or forcetoint(self.rollers[rollerid].version)
+                )
                 if version < ONLINE_MIN_VERSION:
                     newvals["online"] = True
+                    newvals["closed_percent"] = 50
             except Exception:
                 pass
 
@@ -484,7 +488,7 @@ class Roller:
         if self._moving:
             if self.action == MovingAction.stopped:
                 # Guess as to the direction
-                if self.closed_percent > 50:
+                if forcetoint(self.closed_percent) > 50:
                     self.action = MovingAction.up
                 else:
                     self.action = MovingAction.down
@@ -518,17 +522,20 @@ class Roller:
 
     async def move_to(self, percent: int):
         """Send command to move the roller to a percentage closed."""
-        currentpcg = self.closed_percent
-        if currentpcg is None:
-            currentpcg = 50
-        if percent > currentpcg:
-            self.action = MovingAction.down
-        elif percent < currentpcg:
-            self.action = MovingAction.up
+        if forcetoint(self.version) < ONLINE_MIN_VERSION:
+            self.closed_percent = percent
         else:
-            self.action = MovingAction.stopped
-        self._moving = True
-        self.target_closed_percent = percent
+            currentpcg = self.closed_percent
+            if currentpcg is None:
+                currentpcg = 50
+            if percent > currentpcg:
+                self.action = MovingAction.down
+            elif percent < currentpcg:
+                self.action = MovingAction.up
+            else:
+                self.action = MovingAction.stopped
+            self._moving = True
+            self.target_closed_percent = percent
         self.notify_callback()
         await self.hub.send_payload(
             {
@@ -559,3 +566,11 @@ class Roller:
                 },
             }
         )
+
+
+def forcetoint(src) -> int:
+    """Forces the input value to an int, on error, returns 0"""
+    try:
+        return int(src)
+    except Exception:
+        return 0
