@@ -28,3 +28,20 @@ Use the `list` command to get the id of the hubs/blinds.
 | stop [hub id][blind id]              | Stop blind                                                                                                         |
 | moveto [hub id][blind id] [% closed] | Open blind to percentage                                                                                           |
 | exit                                 | Exit program                                                                                                       |
+
+### pulse_hub_cli.py
+
+This is a trivial work-in-progress aiopulse2 command-line-interface wrapper.  It issues a command to a blind given the hub ip address, device name as defined in the *Pulse 2* app and desired percentage closed.  It then waits for the command to complete.
+
+`python3 pulse_hub_cli.py '192.168.1.127' 'Office 1 of 3' 100`
+
+### close.sh
+
+This is an example application of pulse_hub_cli.py.  It closes three blinds in sequence.  In this case, it is useful to close the blinds one at a time because they share a small power supply.
+
+```
+python3 pulse_hub_cli.py '192.168.1.127' 'Office 1 of 3' 100
+python3 pulse_hub_cli.py '192.168.1.127' 'Office 2 of 3' 100
+python3 pulse_hub_cli.py '192.168.1.127' 'Office 3 of 3' 100
+```
+
