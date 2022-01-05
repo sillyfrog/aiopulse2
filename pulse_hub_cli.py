@@ -36,11 +36,20 @@ def async_add_job(
         task = event_loop.run_in_executor(None, target, *args)  # type: ignore
     return task
 
+async def close_up(event_loop, hub):
+  print(f"  close the connection")
+  add_job(event_loop, hub.stop)
+
+  print(f"  wait for the connection to close")
+  while(hub.running):
+    await asyncio.sleep(0.5)
+
 async def main():
   """cli utility"""
 
   if(len(sys.argv) != 4):
-    raise ValueError("usage: pulse_hub_cli.py hub_ip roller_name closed_percent\n")
+    print(f"usage: pulse_hub_cli.py hub_ip roller_name closed_percent")
+    exit(1)
 
   hubip=sys.argv[1]
   desired_roller_name = sys.argv[2]
@@ -60,17 +69,28 @@ async def main():
   await hub.rollers_known.wait()
 
   print("  find the roller")
-  for roller in hub.rollers.values():
-    if(roller.name==desired_roller_name):
-      break
-  else:
-    print(f"  failed to find roller {desired_roller_name}")
-   # to-do sometimes it takes a little while for a roller to come in
-    exit(1)
+  counter=0
+  roller = list(hub.rollers.values())[0]
+  while(roller.name!=desired_roller_name):  # hub.rollers gets populated while this loop runs sometimes
+    for roller in hub.rollers.values():
+      if(roller.name==desired_roller_name):
+        break
+    if(roller.name!=desired_roller_name):
+      counter+=1
+      if(counter>200): # timeout after 20 seconds
+        print(f"  failed to find roller {desired_roller_name}")
+        await close_up(event_loop, hub)
+        exit(1)
+      await asyncio.sleep(0.5)
 
   print("  ensure the roller is all set")
+  counter=0
   while(roller.closed_percent==None):
-    print(f" roller {roller.name} has not reported yet")
+    counter+=1
+    if(counter>200): # timeout after 20 seconds
+      print(f"   roller {roller.name} has not reported")
+      await close_up(event_loop, hub)
+      exit(1)
     await asyncio.sleep(0.5)
 
   print('  send moveto command')
@@ -82,8 +102,11 @@ async def main():
     counter+=1
     if(counter>200): # timeout after 20 seconds - to-do - rounding error can cause this e.g. a roller looking for 27 to finish at 26
       print(f"  timeout - roller has not yet arrived at {desired_closed_percent} - {roller.closed_percent}")
+      await close_up(event_loop, hub)
       exit(1)
     await asyncio.sleep(0.1)
+
+  await close_up(event_loop, hub)
 
 if __name__ == "__main__":
     asyncio.run(main())
