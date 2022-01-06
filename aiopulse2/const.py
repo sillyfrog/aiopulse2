@@ -43,7 +43,7 @@ for var, value in dict(globals()).items():
 
 TYPES = {
     "A": "AC motor",
-    "U": "AC motor (U)",
+    "U": "DC motor (U)",
     "B": "Hub/Gateway",
     "C": "Curtain motor",
     "D": "DC motor",

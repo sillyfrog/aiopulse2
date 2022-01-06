@@ -466,7 +466,11 @@ class Roller:
         """
         if not self.has_battery or not self.battery:
             return None
-        percent = int(27.4 * self.battery - 255)
+        if self.devicetypeshort == "U":
+            # Smaller 8.3v battery
+            percent = int(42.8 * self.battery - 255)
+        else:
+            percent = int(27.4 * self.battery - 255)
         if percent < 0:
             percent = 0
         elif percent > 100:
@@ -476,7 +480,7 @@ class Roller:
     @property
     def has_battery(self):
         """True if device appears to be battery operated"""
-        return self.devicetypeshort == "D"
+        return self.devicetypeshort in ("D", "U")
 
     @property
     def moving(self):
