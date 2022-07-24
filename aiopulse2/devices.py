@@ -323,10 +323,12 @@ class Hub:
                     self.sent_details_request.add(rollerid)
             else:
                 batteryinfo = const.WS_ROLLER_VOLTAGE.match(roller["vo"])
+                _LOGGER.info("XXX batteryinfo: %s, vo: %s", batteryinfo, roller["vo"])
                 if batteryinfo:
+                    _LOGGER.info("XXX batteryinfo groups: %s", batteryinfo.groups())
                     newvals["battery"] = float(batteryinfo.group("voltage"))
                     newvals["devicetypeshort"] = batteryinfo.group("type")
-                    newvals["devicetype"] = const.TYPES.get(batteryinfo.group("type"))
+                    newvals["devicetype"] = "dbg: " + const.TYPES.get(batteryinfo.group("type"), f"unknwn {batteryinfo.group('type')}")
                     newvals["version"] = batteryinfo.group("version")
 
             try:
