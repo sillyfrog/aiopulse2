@@ -31,7 +31,7 @@ DEVICE_MOVE_TO_POSITION_RESPONSE = re.compile(
 )
 
 WS_ROLLER_VOLTAGE = re.compile(
-    r"(?P<voltage>[\.0-9]+)(?P<type>[A-Z])(?P<version>\d{2})"
+    r"(?P<voltage>[\.0-9]+)(?P<type>[A-Za-z])(?P<version>\d{2})"
 )
 
 ALL_RESPONSES = {}
@@ -47,6 +47,7 @@ TYPES = {
     "B": "Hub/Gateway",
     "C": "Curtain motor",
     "D": "DC motor",
+    "d": "DC motor (lower)",
     "S": "Socket",
     "L": "Lighting devices",
 }

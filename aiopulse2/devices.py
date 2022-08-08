@@ -326,7 +326,7 @@ class Hub:
                 if batteryinfo:
                     newvals["battery"] = float(batteryinfo.group("voltage"))
                     newvals["devicetypeshort"] = batteryinfo.group("type")
-                    newvals["devicetype"] = const.TYPES.get(batteryinfo.group("type"))
+                    newvals["devicetype"] = const.TYPES.get(batteryinfo.group("type"), f"unknown {batteryinfo.group('type')}")
                     newvals["version"] = batteryinfo.group("version")
 
             try:
@@ -460,13 +460,13 @@ class Roller:
     def battery_percent(self):
         """A rough approximation base on the app vs voltage levels read.
 
-        Returns None if they devicetype is not D (DC motor), as there is no battery.
+        Returns None if they devicetype is not D or U (DC motor), as there is no battery.
 
         Should be updated if a better solution is found.
         """
         if not self.has_battery or not self.battery:
             return None
-        if self.devicetypeshort == "U":
+        if self.devicetypeshort in ("U", "d"):
             # Smaller 8.3v battery
             percent = int(42.8 * self.battery - 255)
         else:
@@ -480,7 +480,7 @@ class Roller:
     @property
     def has_battery(self):
         """True if device appears to be battery operated"""
-        return self.devicetypeshort in ("D", "U")
+        return self.devicetypeshort in ("D", "U", "d")
 
     @property
     def moving(self):
