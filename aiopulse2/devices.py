@@ -326,7 +326,10 @@ class Hub:
                 if batteryinfo:
                     newvals["battery"] = float(batteryinfo.group("voltage"))
                     newvals["devicetypeshort"] = batteryinfo.group("type")
-                    newvals["devicetype"] = const.TYPES.get(batteryinfo.group("type"), f"unknown {batteryinfo.group('type')}")
+                    newvals["devicetype"] = const.TYPES.get(
+                        batteryinfo.group("type"),
+                        f"unknown {batteryinfo.group('type')}",
+                    )
                     newvals["version"] = batteryinfo.group("version")
 
             try:
