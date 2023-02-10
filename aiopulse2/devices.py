@@ -19,7 +19,10 @@ _LOGGER = logging.getLogger(__name__)
 # The minimum version above which we can trust the "ol" (online) value. Below this
 # version, the roller will always be reported as online and the position reported will
 # be optimistic (ie: not read from the roller)
-ONLINE_MIN_VERSION = 11
+# Disabling this behavior as it causes issues with other devices, however this should
+# be OK, see https://github.com/sillyfrog/aiopulse2/issues/2
+# Fixes https://github.com/sillyfrog/Automate-Pulse-v2/issues/15
+ONLINE_MIN_VERSION = 0
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 ssl_context.check_hostname = False

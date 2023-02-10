@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="aiopulse2",
     packages=setuptools.find_packages(),
-    version="0.7.0",
+    version="0.8.0",
     license="apache-2.0",
     description="Rollease Acmeda Automate Pulse Hub v2 integration.",
     long_description=long_description,
