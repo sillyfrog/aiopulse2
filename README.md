@@ -6,7 +6,7 @@ This is an updated fork of [aiopulse](https://github.com/atmurray/aiopulse/) for
 
 Requires Python 3.7 or later and uses asyncio and [websockets](https://pypi.org/project/websockets/).
 
-It has been primarily developed as an integration for [Home Assistant](https://www.home-assistant.io/).
+It has been primarily developed as an integration for [Home Assistant](https://www.home-assistant.io/), using the [Automate Pulse v2](https://github.com/sillyfrog/Automate-Pulse-v2/) integration.
 
 ### Installing
 
