@@ -1,4 +1,5 @@
 """Acmeda Pulse Hub and Rollers Interfaces."""
+
 # Note, these are in the same file to prevent circular imports
 import asyncio
 import functools
@@ -9,7 +10,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 import async_timeout
-import websockets
+import websockets.exceptions
 
 from . import const, errors
 from .const import MovingAction
@@ -234,11 +235,14 @@ class Hub:
         """
         if self.ws:
             try:
-                with async_timeout.timeout(10):
+                async with async_timeout.timeout(10):
                     await self.ws.send(json.dumps(jscommand))
                 return True
-            except (websockets.WebSocketException, asyncio.TimeoutError) as e:
-                _LOGGER.warn("Error sending payload: %s", e)
+            except (
+                websockets.exceptions.WebSocketException,
+                asyncio.TimeoutError,
+            ) as e:
+                _LOGGER.warning("Error sending payload: %s", e)
                 self.handshake.clear()
         return False
 
