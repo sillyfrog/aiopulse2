@@ -192,7 +192,7 @@ class Hub:
                     buf = const.DEVICE_QUERY_NAME.format(id=rollerid)
                     writer.write(buf.encode())
                 while True:
-                    with async_timeout.timeout(3):
+                    async with async_timeout.timeout(3):
                         response = await reader.readuntil(b";")
                     if len(response) > 0:
                         _LOGGER.debug("recv < %s", response)
