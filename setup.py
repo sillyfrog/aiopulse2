@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="aiopulse2",
     packages=setuptools.find_packages(),
-    version="0.9.1",
+    version="0.10.0",
     license="apache-2.0",
     description="Rollease Acmeda Automate Pulse Hub v2 integration.",
     long_description=long_description,
@@ -16,7 +16,7 @@ setuptools.setup(
     url="https://github.com/sillyfrog/aiopulse2",
     download_url="https://github.com/sillyfrog/aiopulse2/archive/v0.9.1.tar.gz",
     keywords=["automation"],
-    install_requires=["async_timeout>=3.0", "websockets>=8.1"],
+    install_requires=["async_timeout>=3.0", "websockets>=10.1"],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",

@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import async_timeout
 import websockets.exceptions
+from websockets.protocol import State
 
 from . import const, errors
 from .const import MovingAction
@@ -249,7 +250,7 @@ class Hub:
     async def heartbeat(self):
         reset_request_counter = 3600 / self.heartbeatinterval
         while self.running:
-            if self.ws and self.ws.open and self.handshake.is_set():
+            if self.ws and self.ws.state == State.OPEN and self.handshake.is_set():
                 if self.payload_queue:
                     payload = self.payload_queue.pop(0)
                     success = await self.sendws(payload)
