@@ -1,4 +1,5 @@
 """Rollease Acmeda Automate Pulse asyncio protocol implementation."""
+
 import logging
 
 from .const import MovingAction, UpdateType
@@ -20,6 +21,6 @@ __all__ = [
     "UpdateType",
     "MovingAction",
 ]
-__version__ = "0.6.1"
+__version__ = "0.10.0"
 
 _LOGGER = logging.getLogger(__name__)
