@@ -53,3 +53,8 @@ TYPES = {
 }
 
 MovingAction = Enum("MovingAction", "stopped up down")
+
+# Matter vendor/product ID to model mapping
+MATTER_MODEL_MAPPING = {
+    (4938, 1): "Pulse Pro Hub",
+}

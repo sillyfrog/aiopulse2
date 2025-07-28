@@ -280,7 +280,26 @@ class Hub:
         return updated
 
     async def wsconsumer(self, msg: str):
-        jsmsg = json.loads(msg)
+        try:
+            jsmsg = json.loads(msg)
+        except json.JSONDecodeError as e:
+            _LOGGER.warning("Invalid JSON received: %s", e)
+            
+            # Check if JSON is missing closing braces
+            # this fixes an issue with the output for Pulse Pro Hubs v1.1.0
+            if msg.count('{') > msg.count('}'):
+                missing_braces = msg.count('{') - msg.count('}')
+                fixed_msg = msg + '}' * missing_braces
+                _LOGGER.info("Attempting to fix JSON by adding %d missing closing braces", missing_braces)
+                try:
+                    jsmsg = json.loads(fixed_msg)
+                    _LOGGER.info("Successfully fixed truncated JSON")
+                except json.JSONDecodeError:
+                    _LOGGER.error("Could not fix JSON even after adding missing braces")
+                    return
+            else:
+                return
+        
         if "result" not in jsmsg or "reported" not in jsmsg["result"]:
             _LOGGER.info("Got unknown WS response: %s", msg)
             return
@@ -292,12 +311,22 @@ class Hub:
             self.lasterrorlog = None
         data = jsmsg["result"]["reported"]
         _LOGGER.debug("Got payload: %s", data)
+        # Determine model from mfi field or Matter vendor/product ID mapping
+        # workaround for Pulse Pro Hub
+        model = data.get("mfi", {}).get("model")
+        if not model and "matter" in data:
+            matter_info = data["matter"]
+            vendor_id = matter_info.get("vendorID")
+            product_id = matter_info.get("productID")
+            if vendor_id and product_id:
+                model = const.MATTER_MODEL_MAPPING.get((vendor_id, product_id))
+        
         newvals = {
-            "name": data["name"],
-            "id": data["hubId"],
-            "mac_address": data["mac"],
-            "firmware_ver": data["firmware"]["version"],
-            "model": data["mfi"]["model"],
+            "name": data.get("name"),
+            "id": data.get("hubId"),
+            "mac_address": data.get("mac"),
+            "firmware_ver": data.get("firmware", {}).get("version"),
+            "model": model,
         }
         hubchanges = self.applychanges(self, newvals)
 
