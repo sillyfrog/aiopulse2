@@ -28,6 +28,7 @@ Use the `list` command to get the id of the hubs/blinds.
 | stop [hub id][blind id]              | Stop blind                                                                                                         |
 | moveto [hub id][blind id] [% closed] | Open blind to percentage                                                                                           |
 | exit                                 | Exit program                                                                                                       |
+| log [level str]                      | Set log level, e.g. `log debug`                                                                                    |
 
 ### pulse_hub_cli.py
 

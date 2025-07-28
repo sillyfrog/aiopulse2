@@ -226,6 +226,7 @@ class Hub:
         if not self.running:
             raise errors.NotRunningException
         await self.handshake.wait()
+        _LOGGER.debug("Sending payload: %s", jscommand)
         await self.sendws(jscommand)
 
     async def sendws(self, jscommand: Dict) -> bool:
@@ -284,13 +285,16 @@ class Hub:
             jsmsg = json.loads(msg)
         except json.JSONDecodeError as e:
             _LOGGER.warning("Invalid JSON received: %s", e)
-            
+
             # Check if JSON is missing closing braces
             # this fixes an issue with the output for Pulse Pro Hubs v1.1.0
-            if msg.count('{') > msg.count('}'):
-                missing_braces = msg.count('{') - msg.count('}')
-                fixed_msg = msg + '}' * missing_braces
-                _LOGGER.info("Attempting to fix JSON by adding %d missing closing braces", missing_braces)
+            if msg.count("{") > msg.count("}"):
+                missing_braces = msg.count("{") - msg.count("}")
+                fixed_msg = msg + "}" * missing_braces
+                _LOGGER.info(
+                    "Attempting to fix JSON by adding %d missing closing braces",
+                    missing_braces,
+                )
                 try:
                     jsmsg = json.loads(fixed_msg)
                     _LOGGER.info("Successfully fixed truncated JSON")
@@ -299,7 +303,7 @@ class Hub:
                     return
             else:
                 return
-        
+
         if "result" not in jsmsg or "reported" not in jsmsg["result"]:
             _LOGGER.info("Got unknown WS response: %s", msg)
             return
@@ -320,7 +324,7 @@ class Hub:
             product_id = matter_info.get("productID")
             if vendor_id and product_id:
                 model = const.MATTER_MODEL_MAPPING.get((vendor_id, product_id))
-        
+
         newvals = {
             "name": data.get("name"),
             "id": data.get("hubId"),
