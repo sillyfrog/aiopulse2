@@ -284,20 +284,20 @@ class Hub:
         try:
             jsmsg = json.loads(msg)
         except json.JSONDecodeError as e:
-            _LOGGER.warning("Invalid JSON received: %s", e)
+            _LOGGER.debug("Invalid JSON received: %s", e)
 
             # Check if JSON is missing closing braces
             # this fixes an issue with the output for Pulse Pro Hubs v1.1.0
             if msg.count("{") > msg.count("}"):
                 missing_braces = msg.count("{") - msg.count("}")
                 fixed_msg = msg + "}" * missing_braces
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Attempting to fix JSON by adding %d missing closing braces",
                     missing_braces,
                 )
                 try:
                     jsmsg = json.loads(fixed_msg)
-                    _LOGGER.info("Successfully fixed truncated JSON")
+                    _LOGGER.debug("Successfully fixed truncated JSON")
                 except json.JSONDecodeError:
                     _LOGGER.error("Could not fix JSON even after adding missing braces")
                     return
