@@ -18,6 +18,10 @@ from .const import MovingAction
 
 _LOGGER = logging.getLogger(__name__)
 
+# The maximum voltage for the 8.3v battery, if the voltage is below this, the
+# percentage calculation will use a different formula
+BATTERY_8V_MAX_VOLTAGE = 9.0
+
 # The minimum version above which we can trust the "ol" (online) value. Below this
 # version, the roller will always be reported as online and the position reported will
 # be optimistic (ie: not read from the roller)
@@ -510,7 +514,7 @@ class Roller:
         """
         if not self.has_battery or not self.battery:
             return None
-        if self.devicetypeshort in ("U", "d"):
+        if self.battery < BATTERY_8V_MAX_VOLTAGE:
             # Smaller 8.3v battery
             percent = int(42.8 * self.battery - 255)
         else:
