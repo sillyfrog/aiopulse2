@@ -21,6 +21,6 @@ __all__ = [
     "UpdateType",
     "MovingAction",
 ]
-__version__ = "0.10.0"
+__version__ = "1.0.0"
 
 _LOGGER = logging.getLogger(__name__)
